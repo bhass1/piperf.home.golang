@@ -1,17 +1,26 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"os/exec"
 	"log"
 	"time"
 	"github.com/eclipse/paho.mqtt.golang"
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/service/s3"
 )
+
+var topic string = "piperf/result"
+var broker string = "aws_mqtt_broker:1883"
+var cid string = "aws_client"
 
 var foo mqtt.MessageHandler = func(client mqtt.Client, msg mqtt.Message) {
 	fmt.Printf("TOPIC: %s\n", msg.Topic())
 	fmt.Printf("MSG: %s\n", msg.Payload())
+	send_to_s3(msg.Payload())
 }
 
 var bar mqtt.ConnectionLostHandler = func(client mqtt.Client, err error) {
@@ -29,6 +38,23 @@ var connect_mqtt = func(c mqtt.Client) {
 	}
 }
 
+var send_to_s3 = func(json []byte) {
+	svc := s3.New(session.New())
+	input := &s3.PutObjectInput{
+            ACL:		  aws.String("authenticated-read"),
+	    Body:                 bytes.NewReader(json),
+	    Bucket:               aws.String("home.billhass.me"),
+	    Key:                  aws.String("piperf-log-" + time.Now().Format(time.UnixDate)+".json"),
+	    ServerSideEncryption: aws.String("AES256"),
+	}
+	result, err := svc.PutObject(input)
+	if err != nil {
+	        fmt.Println(err.Error())
+	}
+	return
+	fmt.Println(result)
+}
+
 var shutdown = func(c mqtt.Client) {
 	fmt.Printf("Shutting down...\n")
 	if token := c.Unsubscribe(topic); token.Wait() && token.Error() != nil {
@@ -40,9 +66,6 @@ var shutdown = func(c mqtt.Client) {
 }
 
 
-var topic string = "piperf/result"
-var broker string = "aws_mqtt_broker:1883"
-var cid string = "piperf_home"
 var retry = false
 
 func main() {
