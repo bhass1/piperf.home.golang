@@ -44,14 +44,13 @@ var shutdown_mqtt = func(c mqtt.Client) {
 var topic string = "piperf/result"
 var broker string = "aws_mqtt_broker:1883"
 var cid string = "piperf_home"
-var retry = false
 
 func main() {
 	//mqtt.DEBUG = log.New(os.Stdout, "", 0)
 	mqtt.ERROR = log.New(os.Stdout, "", 0)
 	opts := mqtt.NewClientOptions().AddBroker(broker).SetClientID(cid)
-	opts.SetKeepAlive(2 * time.Second)
-	opts.SetPingTimeout(1 * time.Second)
+	opts.SetKeepAlive(10 * time.Second)
+	opts.SetPingTimeout(5 * time.Second)
 	opts.SetConnectionLostHandler(bar)
 	opts.SetAutoReconnect(true)
 	opts.SetReconnectingHandler(baz)
@@ -59,11 +58,6 @@ func main() {
 	c := mqtt.NewClient(opts)
 	connect_mqtt(c)
 	for {
-		if retry {
-			retry = false
-			connect_mqtt(c)
-		}
-
 		//debug_print("Iperf...")
 		out, err := exec.Command("./do_iperf.sh").Output()
 		if err != nil {
@@ -73,7 +67,7 @@ func main() {
 			c.Publish(topic, 0, false, out)
 			//debug_print("published")
 		}
-		time.Sleep(1*time.Second)
+		time.Sleep(5*time.Second)
 	}
 
 	shutdown_mqtt(c)
